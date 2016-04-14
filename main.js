@@ -29,8 +29,6 @@ function addWallHealthToRenderer(renderer) {
     var lLeg = model.getPart("leftLeg");
     head.clear();
     body.clear();
-    body.setTextureOffset(0, 0);
-    body.addBox(-8, 8, -8, 16, 16, 16);
     rArm.clear();
     lArm.clear();
     rLeg.clear();
@@ -64,32 +62,58 @@ var currentDifficulty=1;
 var Difficulty=[[1,3],[2,7],[3,10],[4,12],[5,30]];
 var GUI;
 var currentMoney=0;
+var currentHealth=500;
 
-Block.defineBlock(236, "Easter Egg", ["piston_inner", 0], 2, false, 0);
+Block.defineBlock(236, "Easter Egg", ["furnace", 3], 1, false, 0);
 Block.defineBlock(237, "Iron", ["hopper_outside", 0], 1, false, 0);
 Block.defineBlock(238, "Wood", ["log", 0], 1, false, 0);
+Block.defineBlock(201, "Iron", ["hopper_outside", 0], 1, false, 0);
+Block.defineBlock(202, "Wood", ["log", 0], 1, false, 0);
 Block.setShape(237, 1/6, 0, 1/6, 5/6, 1/4, 5/6);
 Block.setShape(238, 1/6, 0, 1/6, 5/6, 1/4, 5/6);
+Block.setShape(201, 1/6, 0, 1/6, 5/6, 1/4, 5/6);
+Block.setShape(202, 1/6, 0, 1/6, 5/6, 1/4, 5/6);
+Block.setDestroyTime(201,0.42);
+Block.setDestroyTime(202,0.42);
+Block.setDestroyTime(236,-1);
+Block.setDestroyTime(237,-1);
+Block.setDestroyTime(238,-1);
 Block.setLightLevel(236, 0);
-Block.setRenderLayer(236, 1);
 Block.setLightOpacity(236, 1E-4);
+Block.setLightOpacity(201, 1E-4);
+Block.setLightOpacity(202, 1E-4);
+
 
 ModPE.setItem(898,"egg",0,"Wall Spawner Test",1);
+ModPE.setItem(899,"tomahawk",0,"Tomahawk",1);
 
+Item.setHandEquipped(899,true);
+Item.setCategory(899,3);
+
+Player.addItemCreativeInv(899, 1, 0);
 Player.addItemCreativeInv(898, 1, 0);
 Player.addItemCreativeInv(237, 1, 0);
 Player.addItemCreativeInv(238, 1, 0);
 
 var Shelter = {
+    SaveData: function() {
+        ModPE.removeData(Level.getWorldDir()+"shelter");
+        ModPE.saveData(Level.getWorldDir()+"shelter",currentLevel);
+        ModPE.removeData(Level.getWorldDir()+"money");
+        ModPE.saveData(Level.getWorldDir()+"money",currentMoney);
+        ModPE.removeData(Level.getWorldDir()+"cdif");
+        ModPE.saveData(Level.getWorldDir()+"cdif",currentDifficulty);
+    },
     LoadData: function() {
-        var checkSave=ModPE.readData(Level.getWorldDir()+"snov");
-        if(checkSave!=""||checkSave!=null||checkSave!=undefined) {
+        if(ModPE.readData(Level.getWorldDir()+"shelter")>1) {
             print("Save found, loading...")
-            currentLevel=checkSave;
+            currentLevel=ModPE.readData(Level.getWorldDir()+"shelter");
         }
-        var checkMoney=ModPE.readData(Level.getWorldDir()+"money");
-        if(checkMoney!=""||checkMoney!=null||checkMoney!=undefined) {
-            currentMoney=checkMoney;
+        if(ModPE.readData(Level.getWorldDir()+"money")>0) {
+            currentMoney=ModPE.readData(Level.getWorldDir()+"money");
+        }
+        if(ModPE.readData(Level.getWorldDir()+"cdif")>1) {
+            currentDifficulty=ModPE.readData(Level.getWorldDir()+"cdif");
         }
     },
     LoadGUI: function() {
@@ -104,14 +128,13 @@ var Shelter = {
                 layout.setOrientation(1);
 
                 var moneyText = new android.widget.TextView(ctx);
-                if(currentMoney==0) {
-                    moneyText.setText("$0");
-                } else moneyText.setText("$"+currentMoney);
-                moneyText.setTextSize(35);
+                moneyText.setText("$"+currentMoney);
+                moneyText.setTextSize(20);
                 moneyText.setTextColor(android.graphics.Color.GREEN);
                 moneyText.setPaintFlags(moneyText.getPaintFlags() | android.graphics.Paint.SUBPIXEL_TEXT_FLAG);
                 moneyText.setShadowLayer(0.001, Math.round(moneyText.getLineHeight() / 8), Math.round(moneyText.getLineHeight() / 8), android.graphics.Color.parseColor("#FF333333"));
                 moneyText.setTypeface(mcfont);
+                //moneyText.setTouchable(false);
                 layout.addView(moneyText);
                 GUI = new android.widget.PopupWindow(layout, android.widget.RelativeLayout.LayoutParams.WRAP_CONTENT,android.widget.RelativeLayout.LayoutParams.WRAP_CONTENT);
                 GUI.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
@@ -130,6 +153,19 @@ var Shelter = {
                 GUI = null;
             }
         }}))
+    },
+    CheckWall: function() {
+        if(wall.length!=0) {
+            if(currentHealth<=0) {
+                for(var p=0;p<wall.length;p++) {
+                    Level.destroyBlock(wall[p][1],wall[p][2],wall[p][3],false);
+                    Entity.setHealth(wall[p][0],-1);
+                    wall.splice(p,1);
+                    currentHealth=0;
+                    ModPE.showTipMessage(ChatColor.DARK_RED+"Your Wall has been destroyed !");
+                }
+            }
+        }
     }
 }
 
@@ -140,55 +176,61 @@ function selectLevelHook() {
 
 function useItem(x,y,z,i,b,s) {
     if(i==898) {
+        Level.setTile(x,y+1,z,236);
         var ent=Level.spawnMob(x+0.5,y+1,z+0.5,15,"shelter/shelter.png");
-        Entity.setMaxHealth(ent,500);
-        Entity.setHealth(ent,500);
         Entity.setRenderType(ent,wallRenderer.renderType);
-        wall.push([ent,Entity.getX(ent),Entity.getY(ent),Entity.getZ(ent)]);
+        wall.push([ent,x,y+1,z]);
     }
 }
 
 function modTick() {
     if(wall.length!=0) {
         for(var i=0;i<wall.length;i++) {
-            Entity.setRot(wall[i][0],getYaw(wall[i][0]),getPitch(wall[i][0]));
-            Entity.setPosition(wall[i][0],wall[i][1],wall[i][2],wall[i][3]);
-            if(Player.getPointedEntity()==wall[i][0]) {
-                ModPE.showTipMessage("Wall Health : "+Entity.getHealth(wall[i][0]));
+            Entity.setRot(wall[i][0],0,0);
+            Entity.setPosition(wall[i][0],wall[i][1]+0.5,wall[i][2],wall[i][3]+0.5);
+            Entity.setFireTicks(wall[i][0],0);
+            if(Player.getPointedBlockId()==236||Player.getPointedEntity()==wall[i][0]) {
+                ModPE.showTipMessage("Wall Health : "+currentHealth);
             }
         }
     }
+    Shelter.CheckWall();
 }
+
 
 function attackHook(a,v) {
     if(wall.length!=0) {
         for(var t=0;t<wall.length;t++) {
             if(v==wall[t][0]) {
-                if(a==getPlayerEnt()||Entity.getEntityTypeId(a)==80) {
-                    preventDefault();
-                } else if(a!=getPlayerEnt()||Entity.getEntityTypeId(a)!=80) {
-                    preventDefault();
-                    Entity.setHealth(wall[t][0],currentLevel*3);
+                preventDefault();
+            }
+        }
+    }
+    if(a==getPlayerEnt()) {
+        if(Player.getCarriedItem()==899) {
+            Entity.setHealth(v,Entity.getHealth(v)-1);
+        }
+    }
+}
+
+function entityHurtHook(a,v) {
+    if(wall.length!=0) {
+        for(var k=0;k<wall.length;k++) {
+            if(v==wall[k][0]) {
+                preventDefault();
+                if(Entity.getEntityTypeId(a)==32) {
+                    currentHealth=currentHealth-(3*currentDifficulty);
+                    Level.destroyBlock(wall[k][1],wall[k][2],wall[k][3],false);
+                    Level.setTile(wall[k][1],wall[k][2],wall[k][3],236);
                 }
             }
         }
     }
 }
 
-function entityAddedHook(e) {
-
-}
-
 function deathHook(a,v) {
-    if(wall.length!=0) {
-        for(var k=0;k<wall.length;k++) {
-            if(v==wall[k][0]) {
-                wall.splice(k,1);
-                ModPE.showTipMessage(ChatColor.DARK_RED+"Your Wall has been destroyed !")
-            }
-        }
-    }
-    if(Entity.getEntityTypeId(v)==32) {
+    if(Entity.getEntityTypeId(v)==32&&a==getPlayerEnt()) {
+        preventDefault();
         var rnd=rndNumber(300,500);
         var chances=Math.round(currentDifficulty*1.2);
         var mny=rnd*chances;
@@ -199,10 +241,23 @@ function deathHook(a,v) {
     }
 }
 
+function destroyBlock(x,y,z) {
+    if(getTile()==201) {
+        var drops=rndNumber(1,5);
+        Level.dropItem(x+0.5,y+0.5,z+0.5,0,265,drops,0);
+    }
+    if(getTile()==202) {
+        var drops=rndNumber(1,5);
+        Level.dropItem(x+0.5,y+0.5,z+0.5,0,17,drops,0);
+    }
+}
+
 function leaveGame() {
     Shelter.CloseGUI();
+    Shelter.SaveData();
 }
 
 function rndNumber(min,max) {
     return Math.floor(Math.random()*(max-min+1)+min);
 }
+
